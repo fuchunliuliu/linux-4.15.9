@@ -138,6 +138,10 @@ struct vring {
 /* We publish the used event index at the end of the available ring, and vice
  * versa. They are at the end for backwards compatibility. */
 #define vring_used_event(vr) ((vr)->avail->ring[(vr)->num])
+
+/* 后端将其下次使用的可用环表的索引，发布到vring_used.ring数组的最后一个元素；
+ * 以便让前端(即本端)看到他的处理进度。
+ * 具体在qemu hw/virtio/virtio.c: virtqueue_pop填充该值 */
 #define vring_avail_event(vr) (*(__virtio16 *)&(vr)->used->ring[(vr)->num])
 
 static inline void vring_init(struct vring *vr, unsigned int num, void *p,
@@ -168,6 +172,10 @@ static inline int vring_need_event(__u16 event_idx, __u16 new_idx, __u16 old)
 	 * corresponding to event_idx + 1 and new_idx respectively.
 	 * Note also that req_event and req_prod in Xen start at 1,
 	 * event indexes in virtio start at 0. */
+
+	/* 对于vring_avail:
+	 *		该表达式若为真，说明后端处理的vring_avail.idx即将超过本端上次发送notify通知时的idx值。
+	 *		因此本端需要生产新的avail desc，并notify后端 */
 	return (__u16)(new_idx - event_idx - 1) < (__u16)(new_idx - old);
 }
 

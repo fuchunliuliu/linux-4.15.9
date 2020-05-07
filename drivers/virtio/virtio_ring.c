@@ -568,8 +568,12 @@ bool virtqueue_kick_prepare(struct virtqueue *_vq)
 	 * event. */
 	virtio_mb(vq->weak_barriers);
 
+	/* 上次通知后端时，vring_avail.ring数组的索引值 */
 	old = vq->avail_idx_shadow - vq->num_added;
+
+	/* 当前vring_avail.ring数组的索引值 */
 	new = vq->avail_idx_shadow;
+
 	vq->num_added = 0;
 
 #ifdef DEBUG
@@ -584,6 +588,7 @@ bool virtqueue_kick_prepare(struct virtqueue *_vq)
 		needs_kick = vring_need_event(virtio16_to_cpu(_vq->vdev, vring_avail_event(&vq->vring)),
 					      new, old);
 	} else {
+		/* 根据后端在vring_used.flags配置的标记，判断是否向后端发送notify通知 */
 		needs_kick = !(vq->vring.used->flags & cpu_to_virtio16(_vq->vdev, VRING_USED_F_NO_NOTIFY));
 	}
 	END_USE(vq);

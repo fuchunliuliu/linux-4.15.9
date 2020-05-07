@@ -1024,12 +1024,15 @@ static int add_recvbuf_mergeable(struct virtnet_info *vi,
  * before we're receiving packets, or from refill_work which is
  * careful to disable receiving (using napi_disable).
  */
+/* 通常在接收路径调用 */
 static bool try_fill_recv(struct virtnet_info *vi, struct receive_queue *rq,
 			  gfp_t gfp)
 {
 	int err;
 	bool oom;
 
+	/* 每循环一次，申请一块物理连续的buffer，并将其地址和长度信息填充至vring_desc描述符数组中。
+	 * 每循环一次，消耗vring_desc描述符数组中的一个描述符 */
 	do {
 		if (vi->mergeable_rx_bufs)
 			err = add_recvbuf_mergeable(vi, rq, gfp);
