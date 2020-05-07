@@ -1291,15 +1291,21 @@ static int xmit_skb(struct send_queue *sq, struct sk_buff *skb)
 		/* Pull header back to avoid skew in tx bytes calculations. */
 		__skb_pull(skb, hdr_len);
 	} else {
+		/* 将数据包头的虚拟地址，映射成物理地址后，添加值sg中。 */
 		sg_set_buf(sq->sg, hdr, hdr_len);
+
+		/* 将数据包的虚拟地址，映射成物理地址后，添加值sg中。 */
 		num_sg = skb_to_sgvec(skb, sq->sg + 1, 0, skb->len);
 		if (unlikely(num_sg < 0))
 			return num_sg;
 		num_sg++;
 	}
+
+	/* [virtio-net send] add-1.1*/
 	return virtqueue_add_outbuf(sq->vq, sq->sg, num_sg, skb, GFP_ATOMIC);
 }
 
+/* 数据包的发送函数。接收来自网络协议栈的数据包，将其添加至ring buffer，并通知后端。 */
 static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
@@ -1319,6 +1325,7 @@ static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* timestamp packet in software */
 	skb_tx_timestamp(skb);
 
+	/* 将skb添加至ring buffer。 */
 	/* Try to transmit */
 	err = xmit_skb(sq, skb);
 
@@ -1363,6 +1370,7 @@ static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	if (kick || netif_xmit_stopped(txq))
+		/* 通知后端 */
 		virtqueue_kick(sq->vq);
 
 	return NETDEV_TX_OK;
@@ -2103,6 +2111,7 @@ static int virtnet_xdp(struct net_device *dev, struct netdev_bpf *xdp)
 	}
 }
 
+/* virtio-net网络驱动注册的操作函数 */
 static const struct net_device_ops virtnet_netdev = {
 	.ndo_open            = virtnet_open,
 	.ndo_stop   	     = virtnet_close,

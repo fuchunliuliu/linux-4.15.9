@@ -62,10 +62,10 @@ struct vring_desc_state {
 };
 
 struct vring_virtqueue {
-	struct virtqueue vq;
+	struct virtqueue vq; /* define in : include/linux/virtio.h */
 
 	/* Actual memory layout for this queue */
-	struct vring vring;
+	struct vring vring;  /* define in : include/uapi/linux/virtio_ring.h */
 
 	/* Can we use weak barriers? */
 	bool weak_barriers;
@@ -79,6 +79,7 @@ struct vring_virtqueue {
 	/* Host publishes avail event idx */
 	bool event;
 
+	/* vring.desc数组的索引。添加内容值ring buffer时，直接使用该索引获取可用的vring_desc */
 	/* Head of free buffer list. */
 	unsigned int free_head;
 	/* Number we've added since last sync. */
@@ -257,6 +258,7 @@ static struct vring_desc *alloc_indirect(struct virtqueue *_vq,
 	return desc;
 }
 
+/* [virtio-net send] add-1.2*/
 static inline int virtqueue_add(struct virtqueue *_vq,
 				struct scatterlist *sgs[],
 				unsigned int total_sg,
@@ -338,6 +340,9 @@ static inline int virtqueue_add(struct virtqueue *_vq,
 
 	for (n = 0; n < out_sgs; n++) {
 		for (sg = sgs[n]; sg; sg = sg_next(sg)) {
+
+			/* 将sg中转换至vring_desc。vring_desc define in : include/uapi/linux/virtio_ring.h */
+
 			dma_addr_t addr = vring_map_one_sg(vq, sg, DMA_TO_DEVICE);
 			if (vring_mapping_error(vq, addr))
 				goto unmap_release;
@@ -394,6 +399,8 @@ static inline int virtqueue_add(struct virtqueue *_vq,
 		vq->desc_state[head].indir_desc = desc;
 	else
 		vq->desc_state[head].indir_desc = ctx;
+
+	/* 将封装好的描述符链的头结点的索引，添加至vring_avail中 */
 
 	/* Put entry in available array (but don't update avail->idx until they
 	 * do sync). */
@@ -599,6 +606,7 @@ bool virtqueue_notify(struct virtqueue *_vq)
 	if (unlikely(vq->broken))
 		return false;
 
+	/* vp->notify --> virtio_pci.c : vp_notify */
 	/* Prod other side to tell it about changes. */
 	if (!vq->notify(_vq)) {
 		vq->broken = true;

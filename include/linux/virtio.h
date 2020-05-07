@@ -31,6 +31,7 @@ struct virtqueue {
 	const char *name;
 	struct virtio_device *vdev;
 	unsigned int index;
+	/* vring_desc描述符数组可用的描述符个数 */
 	unsigned int num_free;
 	void *priv;
 };
