@@ -41,10 +41,13 @@ void vp_synchronize_vectors(struct virtio_device *vdev)
 }
 
 /* the notify function used when creating a virt queue */
+/* [notify guest->host] step 3 */
 bool vp_notify(struct virtqueue *vq)
 {
 	/* we write the queue's selector into the notification register to
 	 * signal the other end */
+	/* 将队列索引写入PCI配置空间寄存器VIRTIO_PCI_QUEUE_NOTIFY；
+	 * 由于IO操作引发VM-Exit，进而执行qemu: hw/virtio/virtio-pci.c: virtio_ioport_write():VIRTIO_PCI_QUEUE_NOTIFY */
 	iowrite16(vq->index, (void __iomem *)vq->priv);
 	return true;
 }

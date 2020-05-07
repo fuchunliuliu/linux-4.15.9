@@ -604,6 +604,7 @@ EXPORT_SYMBOL_GPL(virtqueue_kick_prepare);
  *
  * Returns false if host notify failed or queue is broken, otherwise true.
  */
+/* [notify guest->host] step 2 */
 bool virtqueue_notify(struct virtqueue *_vq)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
@@ -633,6 +634,7 @@ EXPORT_SYMBOL_GPL(virtqueue_notify);
  *
  * Returns false if kick failed, otherwise true.
  */
+/* [notify guest->host] step 1 */
 bool virtqueue_kick(struct virtqueue *vq)
 {
 	if (virtqueue_kick_prepare(vq))
