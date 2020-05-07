@@ -110,7 +110,8 @@ static u16 vp_config_vector(struct virtio_pci_device *vp_dev, u16 vector)
 	/* Will also flush the write out to device */
 	return ioread16(vp_dev->ioaddr + VIRTIO_MSI_CONFIG_VECTOR);
 }
-
+	
+/* [setup vring] step 12 */
 static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 				  struct virtio_pci_vq_info *info,
 				  unsigned index,
@@ -124,16 +125,20 @@ static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 	int err;
 
 	/* Select the queue we're interested in */
+	/* 本次操作的队列索引 */
 	iowrite16(index, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_SEL);
 
 	/* Check if queue is either not available or already active. */
+	/* 检查是否有队列可用 */
 	num = ioread16(vp_dev->ioaddr + VIRTIO_PCI_QUEUE_NUM);
+	/* 检查队列是否已激活 */
 	if (!num || ioread32(vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN))
 		return ERR_PTR(-ENOENT);
 
 	info->msix_vector = msix_vec;
 
 	/* create the vring */
+	/* 创建vring */
 	vq = vring_create_virtqueue(index, num,
 				    VIRTIO_PCI_VRING_ALIGN, &vp_dev->vdev,
 				    true, false, ctx,
@@ -142,6 +147,8 @@ static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 		return ERR_PTR(-ENOMEM);
 
 	/* activate the queue */
+	/* 将vring的物理页框号写入PCI配置空间的寄存器VIRTIO_PCI_QUEUE_PFN中；
+	 * 由于IO操作导致VM-Eexit，进而执行qemu: hw/virtio/virtio-pci.c: virtio_ioport_write(): VIRTIO_PCI_QUEUE_PFN */
 	iowrite32(virtqueue_get_desc_addr(vq) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT,
 		  vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
 
@@ -184,6 +191,8 @@ static void del_vq(struct virtio_pci_vq_info *info)
 	vring_del_virtqueue(vq);
 }
 
+	
+/* [setup vring] step 6 */ 
 static const struct virtio_config_ops virtio_pci_config_ops = {
 	.get		= vp_get,
 	.set		= vp_set,
@@ -248,9 +257,11 @@ int virtio_pci_legacy_probe(struct virtio_pci_device *vp_dev)
 	vp_dev->vdev.id.vendor = pci_dev->subsystem_vendor;
 	vp_dev->vdev.id.device = pci_dev->subsystem_device;
 
+	/* [setup vring] step 5 */ 
 	vp_dev->vdev.config = &virtio_pci_config_ops;
 
 	vp_dev->config_vector = vp_config_vector;
+	/* [setup vring] step 11 */
 	vp_dev->setup_vq = setup_vq;
 	vp_dev->del_vq = del_vq;
 

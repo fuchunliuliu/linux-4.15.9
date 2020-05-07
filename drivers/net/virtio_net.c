@@ -2290,6 +2290,7 @@ static unsigned int mergeable_min_buf_len(struct virtnet_info *vi, struct virtqu
 		   (unsigned int)GOOD_PACKET_LEN);
 }
 
+/* [setup vring] step 3 */
 static int virtnet_find_vqs(struct virtnet_info *vi)
 {
 	vq_callback_t **callbacks;
@@ -2342,6 +2343,7 @@ static int virtnet_find_vqs(struct virtnet_info *vi)
 			ctx[rxq2vq(i)] = true;
 	}
 
+	/* [setup vring] step 4 */
 	ret = vi->vdev->config->find_vqs(vi->vdev, total_vqs, vqs, callbacks,
 					 names, ctx, NULL);
 	if (ret)
@@ -2410,6 +2412,7 @@ err_sq:
 	return -ENOMEM;
 }
 
+/* [setup vring] step 2 */
 static int init_vqs(struct virtnet_info *vi)
 {
 	int ret;
@@ -2522,6 +2525,7 @@ static int virtnet_validate(struct virtio_device *vdev)
 	return 0;
 }
 
+/* [setup vring] step 1 */
 static int virtnet_probe(struct virtio_device *vdev)
 {
 	int i, err;

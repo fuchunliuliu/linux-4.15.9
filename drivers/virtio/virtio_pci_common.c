@@ -176,6 +176,7 @@ error:
 	return err;
 }
 
+/* [setup vring] step 9 */ 
 static struct virtqueue *vp_setup_vq(struct virtio_device *vdev, unsigned index,
 				     void (*callback)(struct virtqueue *vq),
 				     const char *name,
@@ -191,6 +192,7 @@ static struct virtqueue *vp_setup_vq(struct virtio_device *vdev, unsigned index,
 	if (!info)
 		return ERR_PTR(-ENOMEM);
 
+	/* [setup vring] step 10 */ 
 	vq = vp_dev->setup_vq(vp_dev, info, index, callback, name, ctx,
 			      msix_vec);
 	if (IS_ERR(vq))
@@ -353,6 +355,7 @@ error_find:
 	return err;
 }
 
+/* [setup vring] step 8 */ 
 static int vp_find_vqs_intx(struct virtio_device *vdev, unsigned nvqs,
 		struct virtqueue *vqs[], vq_callback_t *callbacks[],
 		const char * const names[], const bool *ctx)
@@ -392,6 +395,7 @@ out_del_vqs:
 }
 
 /* the config->find_vqs() implementation */
+/* [setup vring] step 7 */ 
 int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 		struct virtqueue *vqs[], vq_callback_t *callbacks[],
 		const char * const names[], const bool *ctx,
