@@ -120,6 +120,13 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 
 void poll_initwait(struct poll_wqueues *pwq)
 {
+	/* typedef struct poll_table_struct {
+			poll_queue_proc _qproc;
+			unsigned long _key;
+	   } poll_table;
+
+		pwq->pt._qproc = __poolwait; 负责将当前进程加入等待队列
+	 * */
 	init_poll_funcptr(&pwq->pt, __pollwait);
 	pwq->polling_task = current;
 	pwq->triggered = 0;
@@ -833,6 +840,8 @@ static inline unsigned int do_pollfd(struct pollfd *pollfd, poll_table *pwait,
 	return mask;
 }
 
+/* 每个fd在其驱动中都会实现一个poll函数；
+ * 该函数的核心是调用各个fd的poll函数，以检测各个fd的状态是否可用 */
 static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 		   struct timespec64 *end_time)
 {
@@ -869,6 +878,9 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 				 * this. They'll get immediately deregistered
 				 * when we break out and return.
 				 */
+
+				/* 针对每个pollfd调用do_pollfd()函数，该函数会调用每个fd的poll()函数；
+				 * 当任意一个fd有事件发生时，do_pollfd()返回非零 */
 				if (do_pollfd(pfd, pt, &can_busy_loop,
 					      busy_flag)) {
 					count++;
@@ -887,9 +899,11 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 		if (!count) {
 			count = wait->error;
 			if (signal_pending(current))
+				/* 本次监控被信号打断 */
 				count = -EINTR;
 		}
 		if (count || timed_out)
+			/* 监控的fds上有事件发生，或超时，则返回至用户态 */
 			break;
 
 		/* only if found POLL_BUSY_LOOP sockets && not out of time */
@@ -913,6 +927,7 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 			to = &expire;
 		}
 
+		/* 进程时间片耗尽，被调度器调度 */
 		if (!poll_schedule_timeout(wait, TASK_INTERRUPTIBLE, to, slack))
 			timed_out = 1;
 	}
@@ -922,6 +937,7 @@ static int do_poll(struct poll_list *list, struct poll_wqueues *wait,
 #define N_STACK_PPS ((sizeof(stack_pps) - sizeof(struct poll_list))  / \
 			sizeof(struct pollfd))
 
+/* [ poll() ] step 2 */
 static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 		struct timespec64 *end_time)
 {
@@ -939,20 +955,26 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 		return -EINVAL;
 
 	len = min_t(unsigned int, nfds, N_STACK_PPS);
+
+	/* fd通过walk管理，多个walk形成链表 */
 	for (;;) {
 		walk->next = NULL;
 		walk->len = len;
 		if (!len)
 			break;
 
+		/* 每个walk管理len个fd */
 		if (copy_from_user(walk->entries, ufds + nfds-todo,
 					sizeof(struct pollfd) * walk->len))
 			goto out_fds;
 
+		/* 还有多少个fd需要管理 */
 		todo -= walk->len;
+		/* 该判断为啥不是：todo <= 0 */
 		if (!todo)
 			break;
 
+		/* 从第二个walk开始，从堆中申请walk的内存 */
 		len = min(todo, POLLFD_PER_PAGE);
 		size = sizeof(struct poll_list) + sizeof(struct pollfd) * len;
 		walk = walk->next = kmalloc(size, GFP_KERNEL);
@@ -966,11 +988,17 @@ static int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 	fdcount = do_poll(head, &table, end_time);
 	poll_freewait(&table);
 
+	/* 向用户空间返回监控结果，主要是当前的可用事件 */
 	for (walk = head; walk; walk = walk->next) {
 		struct pollfd *fds = walk->entries;
 		int j;
 
 		for (j = 0; j < walk->len; j++, ufds++)
+			/* poll相较于epoll低效的原因：
+			 *		用户空间的fds在监控前，需要向内核空间拷贝一次；
+			 *		监控后，监控结果需要向用户空间拷贝；
+			 *		且监控的fd数量较多时，内核空间需要多次的内存申请和释放 */
+			/* 监控结果返回至用户空间 */
 			if (__put_user(fds[j].revents, &ufds->revents))
 				goto out_fds;
   	}
@@ -1009,6 +1037,8 @@ static long do_restart_poll(struct restart_block *restart_block)
 	return ret;
 }
 
+/* [ poll() ] step 1
+ * 用户态poll()系统调用，对应的内核实现 */
 SYSCALL_DEFINE3(poll, struct pollfd __user *, ufds, unsigned int, nfds,
 		int, timeout_msecs)
 {

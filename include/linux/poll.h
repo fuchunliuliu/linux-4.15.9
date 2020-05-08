@@ -84,11 +84,15 @@ struct poll_table_entry {
  * Structures and helpers for select/poll syscall
  */
 struct poll_wqueues {
+	/* 包含将当前进程加入等待队列的函数指针 */
 	poll_table pt;
+	/* 管理poll_table_entry，每个entry对应一个fd，所有page构成链表 */
 	struct poll_table_page *table;
 	struct task_struct *polling_task;
 	int triggered;
 	int error;
+
+	/* 优先使用预先分配好的entry */
 	int inline_index;
 	struct poll_table_entry inline_entries[N_INLINE_POLL_ENTRIES];
 };
