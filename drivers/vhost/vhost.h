@@ -30,10 +30,20 @@ struct vhost_work {
 /* Poll a file (eventfd or socket) */
 /* Note: there's nothing vhost specific about this structure. */
 struct vhost_poll {
+	
+	/* 函数指针table._qproc，在驱动的poll函数中被调用，用于把当前进程加入等待队列;
+	 * 对应函数: vhost_poll_func */
 	poll_table                table;
+
+	/* 等待队列头 */
 	wait_queue_head_t        *wqh;
+
+	/* 等待队列的元素，包含唤醒函数: vhost_poll_wakeup */
 	wait_queue_entry_t              wait;
+
+	/* poll机制的核心任务。主要用于处理网络数据包。函数指针为: handel_rx_net 或 handel_tx_net */
 	struct vhost_work	  work;
+	
 	unsigned long		  mask;
 	struct vhost_dev	 *dev;
 };

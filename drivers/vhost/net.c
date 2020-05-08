@@ -893,6 +893,8 @@ static void handle_rx_net(struct vhost_work *work)
 
 static int vhost_net_open(struct inode *inode, struct file *f)
 {
+	/* 一个vm即一个qemu进程，对应一个vhost-net和vhost-dev，
+	 * 一个vhost-dev可以关联多个vhost-virtqueue */
 	struct vhost_net *n;
 	struct vhost_dev *dev;
 	struct vhost_virtqueue **vqs;
@@ -920,8 +922,11 @@ static int vhost_net_open(struct inode *inode, struct file *f)
 	dev = &n->dev;
 	vqs[VHOST_NET_VQ_TX] = &n->vqs[VHOST_NET_VQ_TX].vq;
 	vqs[VHOST_NET_VQ_RX] = &n->vqs[VHOST_NET_VQ_RX].vq;
+
+	/* 处理来自virtio-net driver的通知消息 */
 	n->vqs[VHOST_NET_VQ_TX].vq.handle_kick = handle_tx_kick;
 	n->vqs[VHOST_NET_VQ_RX].vq.handle_kick = handle_rx_kick;
+
 	for (i = 0; i < VHOST_NET_VQ_MAX; i++) {
 		n->vqs[i].ubufs = NULL;
 		n->vqs[i].ubuf_info = NULL;
@@ -933,6 +938,7 @@ static int vhost_net_open(struct inode *inode, struct file *f)
 	}
 	vhost_dev_init(dev, vqs, VHOST_NET_VQ_MAX);
 
+	/* 每个 vhost_net_virtqueue 对应一个 vhost_poll ， 主要用来监听网络数据包的收发 */
 	vhost_poll_init(n->poll + VHOST_NET_VQ_TX, handle_tx_net, POLLOUT, dev);
 	vhost_poll_init(n->poll + VHOST_NET_VQ_RX, handle_rx_net, POLLIN, dev);
 
@@ -1368,10 +1374,12 @@ static const struct file_operations vhost_net_fops = {
 	.read_iter      = vhost_net_chr_read_iter,
 	.write_iter     = vhost_net_chr_write_iter,
 	.poll           = vhost_net_chr_poll,
+	/* qemu通过ioctl(/dev/vhost-net)读写控制信息 */
 	.unlocked_ioctl = vhost_net_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl   = vhost_net_compat_ioctl,
 #endif
+	/* 用于vhost-net的初始化 */
 	.open           = vhost_net_open,
 	.llseek		= noop_llseek,
 };

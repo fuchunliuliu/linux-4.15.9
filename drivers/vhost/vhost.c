@@ -189,8 +189,15 @@ EXPORT_SYMBOL_GPL(vhost_work_init);
 void vhost_poll_init(struct vhost_poll *poll, vhost_work_fn_t fn,
 		     unsigned long mask, struct vhost_dev *dev)
 {
+	/* 每个 vhost_net_virtqueue 对应一个 vhost_poll；
+	 * 在对某个描述符poll的时候，会把对应 vhost_poll 加入等待队列 
+	 * vhost_poll_wakeup是等待队列的唤醒函数；
+	 * */
 	init_waitqueue_func_entry(&poll->wait, vhost_poll_wakeup);
+
 	init_poll_funcptr(&poll->table, vhost_poll_func);
+
+	/* POLLIN 或 POLL_OUT */
 	poll->mask = mask;
 	poll->dev = dev;
 	poll->wqh = NULL;
@@ -265,7 +272,11 @@ void vhost_work_queue(struct vhost_dev *dev, struct vhost_work *work)
 		 * sure it was not in the list.
 		 * test_and_set_bit() implies a memory barrier.
 		 */
+
+		/* 把 vhost_work 加入到设备的工作链表，该链表会在后台线程 vhost_work 中遍历处理 */
 		llist_add(&work->node, &dev->work_list);
+
+		/* 唤醒工作线程 vhost_work，执行work中注册的fn, 即 handle_rx_net 或 handle_tx_net , 进而数据包得到处理 */
 		wake_up_process(dev->worker);
 	}
 }
@@ -443,6 +454,8 @@ void vhost_dev_init(struct vhost_dev *dev,
 		mutex_init(&vq->mutex);
 		vhost_vq_reset(dev, vq);
 		if (vq->handle_kick)
+			/* 每个 vhost_virtqueue 有自己的 vhost_poll;
+			 * 该 vhost_poll只要用来监听来自guest的 kick 事件 */
 			vhost_poll_init(&vq->poll, vq->handle_kick,
 					POLLIN, dev);
 	}
