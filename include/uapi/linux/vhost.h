@@ -84,6 +84,7 @@ struct vhost_memory_region {
 /* All region addresses and sizes must be 4K aligned. */
 #define VHOST_PAGE_SIZE 0x1000
 
+/* vhost的内存布局 */
 struct vhost_memory {
 	__u32 nregions;
 	__u32 padding;

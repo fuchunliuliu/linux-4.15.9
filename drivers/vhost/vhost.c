@@ -503,6 +503,7 @@ bool vhost_dev_has_owner(struct vhost_dev *dev)
 EXPORT_SYMBOL_GPL(vhost_dev_has_owner);
 
 /* Caller should have device mutex */
+/* 将Guest对应的Qemu进程与内核vhost-worker线程关联起来 */
 long vhost_dev_set_owner(struct vhost_dev *dev)
 {
 	struct task_struct *worker;
@@ -1079,6 +1080,8 @@ unsigned int vhost_chr_poll(struct file *file, struct vhost_dev *dev,
 {
 	unsigned int mask = 0;
 
+	/* define in include/linux/poll.h;
+	 * call wait->_qproc */
 	poll_wait(file, &dev->wait, wait);
 
 	if (!list_empty(&dev->read_list))
@@ -1295,6 +1298,7 @@ static struct vhost_umem *vhost_umem_alloc(void)
 	return umem;
 }
 
+/* 初始化vhost_dev的vhost_umem成员 */
 static long vhost_set_memory(struct vhost_dev *d, struct vhost_memory __user *m)
 {
 	struct vhost_memory mem, *newmem;
@@ -1485,6 +1489,7 @@ long vhost_vring_ioctl(struct vhost_dev *d, int ioctl, void __user *argp)
 		vq->used = (void __user *)(unsigned long)a.used_user_addr;
 		break;
 	case VHOST_SET_VRING_KICK:
+		/* 设置ioeventfd, 获取guest notify */
 		if (copy_from_user(&f, argp, sizeof f)) {
 			r = -EFAULT;
 			break;
@@ -1501,6 +1506,7 @@ long vhost_vring_ioctl(struct vhost_dev *d, int ioctl, void __user *argp)
 			filep = eventfp;
 		break;
 	case VHOST_SET_VRING_CALL:
+		/* 设置irqfd, 把中断注入guest */
 		if (copy_from_user(&f, argp, sizeof f)) {
 			r = -EFAULT;
 			break;
