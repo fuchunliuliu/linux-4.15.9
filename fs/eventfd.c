@@ -5,6 +5,9 @@
  *
  */
 
+/* 1. 用于通知或同步，不适用于传递大量数据
+ * 2. 类似于pipe, 无磁盘文件与之对应，仅用于有亲缘关系的进程与之通信； */
+
 #include <linux/file.h>
 #include <linux/poll.h>
 #include <linux/init.h>
@@ -51,6 +54,11 @@ struct eventfd_ctx {
  * Returns the amount by which the counter was incremented.  This will be less
  * than @n if the counter has overflowed.
  */
+/* 与eventfd_write功能类似。
+ * 区别:
+ *		1. eventfd_signal由内核调用；
+ *		2. 不会阻塞；
+ *		3. 不会导致ctx->counter溢出 */
 __u64 eventfd_signal(struct eventfd_ctx *ctx, __u64 n)
 {
 	unsigned long flags;
@@ -231,28 +239,42 @@ ssize_t eventfd_ctx_read(struct eventfd_ctx *ctx, int no_wait, __u64 *cnt)
 	res = -EAGAIN;
 	if (ctx->count > 0)
 		res = 0;
-	else if (!no_wait) {
+	else if (!no_wait) { /* 没有设置nonblock标志，进程再此阻塞读 */
+		/* 将当前进程加入eventfd对应的等待队列 */
 		__add_wait_queue(&ctx->wqh, &wait);
 		for (;;) {
+			/* 将当前进程置为睡眠状态 */
 			set_current_state(TASK_INTERRUPTIBLE);
+
+			/* 查询是否有写操作发生 */
 			if (ctx->count > 0) {
 				res = 0;
 				break;
 			}
+
+			/* 被信号打断 */
 			if (signal_pending(current)) {
 				res = -ERESTARTSYS;
 				break;
 			}
+
+			/* 触发调度器执行 */
 			spin_unlock_irq(&ctx->wqh.lock);
 			schedule();
 			spin_lock_irq(&ctx->wqh.lock);
 		}
+
+		/* 将当前进程从等待队列移除，并设置为运行状态 */
 		__remove_wait_queue(&ctx->wqh, &wait);
 		__set_current_state(TASK_RUNNING);
 	}
 	if (likely(res == 0)) {
+		/* 读取并清零count值 */
 		eventfd_ctx_do_read(ctx, cnt);
+
+		/* 检查eventfd对应的等待队列上是否有阻塞于write操作的进程 */
 		if (waitqueue_active(&ctx->wqh))
+			/* 唤醒进程 */
 			wake_up_locked_poll(&ctx->wqh, POLLOUT);
 	}
 	spin_unlock_irq(&ctx->wqh.lock);
@@ -447,6 +469,8 @@ struct file *eventfd_file_create(unsigned int count, int flags)
 	ctx->count = count;
 	ctx->flags = flags;
 
+	/* 每个eventfd对应一个eventfd_ctx结构，且赋值给file->private_data;
+	 * 且为eventfd关联了操作函数表eventfd_fops */
 	file = anon_inode_getfile("[eventfd]", &eventfd_fops, ctx,
 				  O_RDWR | (flags & EFD_SHARED_FCNTL_FLAGS));
 	if (IS_ERR(file))
@@ -455,11 +479,13 @@ struct file *eventfd_file_create(unsigned int count, int flags)
 	return file;
 }
 
+/* eventfd */
 SYSCALL_DEFINE2(eventfd2, unsigned int, count, int, flags)
 {
 	int fd, error;
 	struct file *file;
 
+	/* 获取一个空闲的文件描述符 */
 	error = get_unused_fd_flags(flags & EFD_SHARED_FCNTL_FLAGS);
 	if (error < 0)
 		return error;
